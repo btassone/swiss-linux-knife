@@ -152,8 +152,9 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 		},
 		func(id widget.TableCellID, cell fyne.CanvasObject) {
 			box := cell.(*fyne.Container)
-			orderLabel := box.Objects[0].(*widget.Label)
-			entry := box.Objects[1].(*widget.Entry)
+			// In BorderContainer: Objects[0] is center (entry), Objects[1] is left (orderLabel), Objects[2] is right (btn)
+			entry := box.Objects[0].(*widget.Entry)
+			orderLabel := box.Objects[1].(*widget.Label)
 			btn := box.Objects[2].(*widget.Button)
 			
 			if id.Row < len(pathData) {
