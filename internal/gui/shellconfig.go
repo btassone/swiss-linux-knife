@@ -1,4 +1,4 @@
-package main
+package gui
 
 import (
 	"fmt"
@@ -11,10 +11,11 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"github.com/btassone/swiss-linux-knife/internal/shellconfig"
 )
 
 type ShellConfigGUI struct {
-	config        *ShellConfig
+	config        *shellconfig.Config
 	window        fyne.Window
 	aliasesTable  *widget.Table
 	exportsTable  *widget.Table
@@ -23,21 +24,24 @@ type ShellConfigGUI struct {
 	pluginChecks  map[string]bool
 }
 
-func createShellConfigContent(window fyne.Window) fyne.CanvasObject {
-	config := NewShellConfig()
+func NewShellConfigGUI(window fyne.Window) *ShellConfigGUI {
+	config := shellconfig.New()
 	gui := &ShellConfigGUI{
 		config:       config,
 		pluginChecks: make(map[string]bool),
 		window:       window,
 	}
+	return gui
+}
 
-	if err := config.Load(); err != nil {
+func (gui *ShellConfigGUI) CreateContent() fyne.CanvasObject {
+	if err := gui.config.Load(); err != nil {
 		return container.NewCenter(
 			widget.NewLabel(fmt.Sprintf("Error loading config: %v", err)),
 		)
 	}
 
-	for _, plugin := range config.OhMyZshPlugins {
+	for _, plugin := range gui.config.OhMyZshPlugins {
 		gui.pluginChecks[plugin] = true
 	}
 
@@ -56,7 +60,7 @@ func createShellConfigContent(window fyne.Window) fyne.CanvasObject {
 	saveButton.Importance = widget.HighImportance
 
 	reloadButton := widget.NewButton("Reload", func() {
-		config.Load()
+		gui.config.Load()
 		gui.refreshAll()
 	})
 
@@ -120,12 +124,10 @@ func (gui *ShellConfigGUI) createEnvironmentTab() fyne.CanvasObject {
 func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 	currentPath := gui.config.Exports["PATH"]
 	if currentPath == "" {
-		// Get system PATH if not set
 		currentPath = os.Getenv("PATH")
 	}
 	paths := strings.Split(currentPath, ":")
 	
-	// Remove empty paths
 	filteredPaths := []string{}
 	for _, p := range paths {
 		if p != "" {
@@ -152,13 +154,11 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 		},
 		func(id widget.TableCellID, cell fyne.CanvasObject) {
 			box := cell.(*fyne.Container)
-			// In BorderContainer: Objects[0] is center (entry), Objects[1] is left (orderLabel), Objects[2] is right (btn)
 			entry := box.Objects[0].(*widget.Entry)
 			orderLabel := box.Objects[1].(*widget.Label)
 			btn := box.Objects[2].(*widget.Button)
 			
 			if id.Row < len(pathData) {
-				// Set order number
 				orderLabel.SetText(fmt.Sprintf("%d.", id.Row+1))
 				
 				entry.SetText(pathData[id.Row][0])
@@ -170,7 +170,6 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 				
 				row := id.Row
 				btn.OnTapped = func() {
-					// Remove the path
 					if row < len(pathData) {
 						pathData = append(pathData[:row], pathData[row+1:]...)
 						pathTable.Refresh()
@@ -181,9 +180,7 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 	)
 	pathTable.SetColumnWidth(0, 800)
 
-	// Add path with file browser
 	addWithBrowserBtn := widget.NewButton("Add Directory...", func() {
-		// Create a custom folder dialog with larger size
 		folderDialog := dialog.NewFolderOpen(func(dir fyne.ListableURI, err error) {
 			if err == nil && dir != nil {
 				pathData = append(pathData, []string{dir.Path()})
@@ -191,12 +188,10 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 			}
 		}, gui.window)
 		
-		// Get the current window size and set dialog to be larger
 		windowSize := gui.window.Canvas().Size()
-		dialogWidth := windowSize.Width * 0.8  // 80% of window width
-		dialogHeight := windowSize.Height * 0.8 // 80% of window height
+		dialogWidth := windowSize.Width * 0.8
+		dialogHeight := windowSize.Height * 0.8
 		
-		// Ensure minimum size
 		if dialogWidth < 800 {
 			dialogWidth = 800
 		}
@@ -208,7 +203,6 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 		folderDialog.Show()
 	})
 
-	// Add custom path
 	customPathEntry := widget.NewEntry()
 	customPathEntry.SetPlaceHolder("/path/to/directory")
 	
@@ -220,7 +214,6 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 		}
 	})
 
-	// Common paths to add
 	commonPaths := []struct{ name, path string }{
 		{"Home bin", "$HOME/bin"},
 		{"Local bin", "/usr/local/bin"},
@@ -249,18 +242,14 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 	quickAddSelect.Options = options
 	quickAddSelect.PlaceHolder = "Quick add common paths..."
 
-	// Track selected row
 	var selectedRow int = -1
 	
-	// Add selection handling to the table
 	pathTable.OnSelected = func(id widget.TableCellID) {
 		selectedRow = id.Row
 	}
 	
-	// Move up/down buttons
 	moveUpBtn := widget.NewButton("Move Up", func() {
 		if selectedRow > 0 && selectedRow < len(pathData) {
-			// Swap with previous item
 			pathData[selectedRow-1], pathData[selectedRow] = pathData[selectedRow], pathData[selectedRow-1]
 			selectedRow--
 			pathTable.Refresh()
@@ -270,7 +259,6 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 	
 	moveDownBtn := widget.NewButton("Move Down", func() {
 		if selectedRow >= 0 && selectedRow < len(pathData)-1 {
-			// Swap with next item
 			pathData[selectedRow], pathData[selectedRow+1] = pathData[selectedRow+1], pathData[selectedRow]
 			selectedRow++
 			pathTable.Refresh()
@@ -278,7 +266,6 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 		}
 	})
 
-	// Save the PATH
 	savePathBtn := widget.NewButton("Apply PATH Changes", func() {
 		newPaths := []string{}
 		for _, row := range pathData {
@@ -294,7 +281,6 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 	})
 	savePathBtn.Importance = widget.HighImportance
 
-	// Info card
 	infoCard := widget.NewCard("About PATH", "", widget.NewLabel(
 		"The PATH variable tells the system where to find executable programs.\n"+
 		"Directories are searched in order from top to bottom.\n"+
@@ -425,9 +411,6 @@ func (gui *ShellConfigGUI) createOhMyZshTab() fyne.CanvasObject {
 
 	searchEntry := widget.NewEntry()
 	searchEntry.SetPlaceHolder("Search plugins...")
-	searchEntry.OnChanged = func(text string) {
-		// TODO: Implement plugin search/filter
-	}
 
 	popularPlugins := widget.NewCard("Popular Plugins", "", container.NewVBox(
 		widget.NewButton("Enable git", func() {
@@ -501,9 +484,7 @@ func (gui *ShellConfigGUI) createFunctionsTab() fyne.CanvasObject {
 	})
 
 	saveButton := widget.NewButton("Save Changes", func() {
-		if functionsList.Length() > 0 {
-			// TODO: Update the selected function with editor content
-		}
+		// TODO: Update the selected function with editor content
 	})
 
 	templateSelect := widget.NewSelect(
@@ -572,7 +553,6 @@ func (gui *ShellConfigGUI) createHistoryTab() fyne.CanvasObject {
 					label.SetText(historyData[id])
 				}
 			} else {
-				// Show filtered results
 				count := 0
 				for _, entry := range historyData {
 					if strings.Contains(strings.ToLower(entry), strings.ToLower(currentFilter)) {
@@ -588,18 +568,14 @@ func (gui *ShellConfigGUI) createHistoryTab() fyne.CanvasObject {
 	)
 	
 	loadHistory := func() []string {
-		// Try to read history using zsh with proper initialization
 		cmd := exec.Command("zsh", "-i", "-c", "history -1000")
 		output, err := cmd.Output()
 		
 		if err != nil || len(output) == 0 {
-			// Try reading the history file directly
 			homeDir, _ := os.UserHomeDir()
 			histFile := filepath.Join(homeDir, ".zsh_history")
 			
-			// Check if .zsh_history exists
 			if _, err := os.Stat(histFile); err != nil {
-				// Try .bash_history as fallback
 				histFile = filepath.Join(homeDir, ".bash_history")
 			}
 			
@@ -611,10 +587,8 @@ func (gui *ShellConfigGUI) createHistoryTab() fyne.CanvasObject {
 			lines := strings.Split(string(data), "\n")
 			result := make([]string, 0, len(lines))
 			
-			// Process lines in reverse order (newest first)
 			for i := len(lines) - 1; i >= 0; i-- {
 				line := strings.TrimSpace(lines[i])
-				// Skip metadata lines in zsh history (they start with :)
 				if line != "" && !strings.HasPrefix(line, ":") {
 					result = append(result, line)
 				}
@@ -623,21 +597,17 @@ func (gui *ShellConfigGUI) createHistoryTab() fyne.CanvasObject {
 			return result
 		}
 		
-		// Parse the history output (format: "number  command")
 		lines := strings.Split(string(output), "\n")
 		result := make([]string, 0, len(lines))
 		
-		// Process lines in reverse order (newest first)
 		for i := len(lines) - 1; i >= 0; i-- {
 			line := strings.TrimSpace(lines[i])
 			if line == "" {
 				continue
 			}
 			
-			// Remove the line number prefix (e.g., "  123  command" -> "command")
 			parts := strings.Fields(line)
 			if len(parts) > 1 {
-				// Skip the first field (line number) and join the rest
 				command := strings.Join(parts[1:], " ")
 				result = append(result, command)
 			}
@@ -646,7 +616,6 @@ func (gui *ShellConfigGUI) createHistoryTab() fyne.CanvasObject {
 		return result
 	}
 	
-	// Initial load
 	historyData = loadHistory()
 	if len(historyData) == 0 {
 		historyData = []string{"No history found. Click Refresh to try again."}
@@ -676,7 +645,6 @@ func (gui *ShellConfigGUI) createHistoryTab() fyne.CanvasObject {
 	})
 	
 	copyButton := widget.NewButton("Copy Selected", func() {
-		// TODO: Implement copy to clipboard when item is selected
 		dialog.ShowInformation("Info", "Select a history item to copy", gui.window)
 	})
 	
@@ -685,7 +653,6 @@ func (gui *ShellConfigGUI) createHistoryTab() fyne.CanvasObject {
 		searchEntry,
 	)
 	
-	// Clean up timer when tab is closed
 	historyTab := container.NewBorder(
 		topBar,
 		widget.NewLabel("Recent commands (click Refresh to update)"),
@@ -724,7 +691,6 @@ func (gui *ShellConfigGUI) updatePluginsFromChecks() {
 	}
 }
 
-
 func (gui *ShellConfigGUI) saveConfiguration() {
 	if err := gui.config.Save(); err != nil {
 		dialog.ShowError(err, gui.window)
@@ -734,13 +700,11 @@ func (gui *ShellConfigGUI) saveConfiguration() {
 }
 
 func (gui *ShellConfigGUI) refreshAll() {
-	// Reset plugin checks based on loaded data
 	gui.pluginChecks = make(map[string]bool)
 	for _, plugin := range gui.config.OhMyZshPlugins {
 		gui.pluginChecks[plugin] = true
 	}
 	
-	// Refresh all UI components
 	if gui.aliasesTable != nil {
 		gui.aliasesTable.Refresh()
 	}

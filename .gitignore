@@ -19,6 +19,7 @@ go.work
 
 # Binary output
 swiss-linux-knife
+bin/
 
 # IDE directories
 .idea/
@@ -44,3 +45,6 @@ Thumbs.db
 # Build directories
 dist/
 build/
+
+# Backup files
+*.bak
