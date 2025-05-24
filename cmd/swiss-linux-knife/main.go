@@ -6,23 +6,8 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/btassone/swiss-linux-knife/internal/tools"
 )
-
-type Tool struct {
-	Name        string
-	Description string
-	Icon        fyne.Resource
-	Content     func(window fyne.Window) fyne.CanvasObject
-}
-
-var tools = []Tool{
-	{
-		Name:        "Shell Config Manager",
-		Description: "Manage bashrc/zshrc visually",
-		Icon:        theme.SettingsIcon(),
-		Content:     createShellConfigContent,
-	},
-}
 
 func main() {
 	myApp := app.New()
@@ -32,9 +17,10 @@ func main() {
 	myWindow.Resize(fyne.NewSize(1200, 700))
 
 	content := container.NewStack()
+	availableTools := tools.GetAvailableTools()
 
 	list := widget.NewList(
-		func() int { return len(tools) },
+		func() int { return len(availableTools) },
 		func() fyne.CanvasObject {
 			return container.NewVBox(
 				widget.NewLabel("Tool Name"),
@@ -46,15 +32,15 @@ func main() {
 			nameLabel := c.Objects[0].(*widget.Label)
 			descLabel := c.Objects[1].(*widget.Label)
 
-			nameLabel.SetText(tools[i].Name)
+			nameLabel.SetText(availableTools[i].Name)
 			nameLabel.TextStyle = fyne.TextStyle{Bold: true}
-			descLabel.SetText(tools[i].Description)
+			descLabel.SetText(availableTools[i].Description)
 			descLabel.TextStyle = fyne.TextStyle{Italic: true}
 		},
 	)
 
 	list.OnSelected = func(id widget.ListItemID) {
-		content.Objects = []fyne.CanvasObject{tools[id].Content(myWindow)}
+		content.Objects = []fyne.CanvasObject{availableTools[id].Content(myWindow)}
 		content.Refresh()
 	}
 
@@ -78,4 +64,3 @@ func main() {
 
 	myWindow.ShowAndRun()
 }
-

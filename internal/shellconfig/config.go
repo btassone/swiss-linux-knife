@@ -1,4 +1,4 @@
-package main
+package shellconfig
 
 import (
 	"bufio"
@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/btassone/swiss-linux-knife/internal/logger"
 )
 
-type ShellConfig struct {
+type Config struct {
 	FilePath        string
 	Aliases         map[string]string
 	Exports         map[string]string
@@ -19,9 +21,9 @@ type ShellConfig struct {
 	RawSections     map[string][]string
 }
 
-func NewShellConfig() *ShellConfig {
+func New() *Config {
 	homeDir, _ := os.UserHomeDir()
-	return &ShellConfig{
+	return &Config{
 		FilePath:        filepath.Join(homeDir, ".zshrc"),
 		Aliases:         make(map[string]string),
 		Exports:         make(map[string]string),
@@ -31,21 +33,24 @@ func NewShellConfig() *ShellConfig {
 	}
 }
 
-func (sc *ShellConfig) Load() error {
-	// Clear existing data before loading
-	sc.Aliases = make(map[string]string)
-	sc.Exports = make(map[string]string)
-	sc.OhMyZshTheme = ""
-	sc.OhMyZshPlugins = []string{}
-	sc.CustomFunctions = []string{}
-	sc.RawSections = make(map[string][]string)
+func (c *Config) Load() error {
+	logger.Debug("Loading shell config from %s", c.FilePath)
+	
+	c.Aliases = make(map[string]string)
+	c.Exports = make(map[string]string)
+	c.OhMyZshTheme = ""
+	c.OhMyZshPlugins = []string{}
+	c.CustomFunctions = []string{}
+	c.RawSections = make(map[string][]string)
 
-	file, err := os.Open(sc.FilePath)
+	file, err := os.Open(c.FilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			logger.Info("Config file does not exist: %s", c.FilePath)
 			return nil
 		}
-		return err
+		logger.Error("Failed to open config file: %v", err)
+		return fmt.Errorf("failed to open config file: %w", err)
 	}
 	defer file.Close()
 
@@ -67,7 +72,7 @@ func (sc *ShellConfig) Load() error {
 
 		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
 			if !inFunction {
-				sc.RawSections[currentSection] = append(sc.RawSections[currentSection], line)
+				c.RawSections[currentSection] = append(c.RawSections[currentSection], line)
 			}
 			continue
 		}
@@ -76,7 +81,7 @@ func (sc *ShellConfig) Load() error {
 			functionLines = append(functionLines, line)
 			if functionEndRegex.MatchString(line) {
 				inFunction = false
-				sc.CustomFunctions = append(sc.CustomFunctions, strings.Join(functionLines, "\n"))
+				c.CustomFunctions = append(c.CustomFunctions, strings.Join(functionLines, "\n"))
 				functionLines = []string{}
 			}
 			continue
@@ -89,76 +94,88 @@ func (sc *ShellConfig) Load() error {
 		}
 
 		if matches := aliasRegex.FindStringSubmatch(line); matches != nil {
-			sc.Aliases[matches[1]] = matches[2]
+			c.Aliases[matches[1]] = matches[2]
 			currentSection = "aliases"
+			logger.Debug("Found alias: %s = %s", matches[1], matches[2])
 		} else if matches := exportRegex.FindStringSubmatch(line); matches != nil {
-			sc.Exports[matches[1]] = matches[2]
+			c.Exports[matches[1]] = matches[2]
 			currentSection = "exports"
+			logger.Debug("Found export: %s = %s", matches[1], matches[2])
 		} else if matches := themeRegex.FindStringSubmatch(line); matches != nil {
-			sc.OhMyZshTheme = matches[1]
+			c.OhMyZshTheme = matches[1]
 			currentSection = "ohmyzsh"
+			logger.Debug("Found theme: %s", matches[1])
 		} else if matches := pluginsRegex.FindStringSubmatch(line); matches != nil {
 			pluginsStr := matches[1]
 			plugins := strings.Fields(pluginsStr)
-			sc.OhMyZshPlugins = plugins
+			c.OhMyZshPlugins = plugins
 			currentSection = "ohmyzsh"
+			logger.Debug("Found plugins: %v", plugins)
 		} else {
-			sc.RawSections[currentSection] = append(sc.RawSections[currentSection], line)
+			c.RawSections[currentSection] = append(c.RawSections[currentSection], line)
 		}
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		logger.Error("Error scanning file: %v", err)
+		return fmt.Errorf("error scanning file: %w", err)
+	}
+	
+	logger.Info("Successfully loaded config: %d aliases, %d exports, %d functions", 
+		len(c.Aliases), len(c.Exports), len(c.CustomFunctions))
+	return nil
 }
 
-func (sc *ShellConfig) Save() error {
-	file, err := os.Create(sc.FilePath + ".tmp")
+func (c *Config) Save() error {
+	logger.Debug("Saving shell config to %s", c.FilePath)
+	
+	tempFile := c.FilePath + ".tmp"
+	file, err := os.Create(tempFile)
 	if err != nil {
-		return err
+		logger.Error("Failed to create temp file: %v", err)
+		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
 
-	if sc.OhMyZshTheme != "" || len(sc.OhMyZshPlugins) > 0 {
+	if c.OhMyZshTheme != "" || len(c.OhMyZshPlugins) > 0 {
 		writer.WriteString("# Oh My Zsh Configuration\n")
-		if sc.OhMyZshTheme != "" {
-			writer.WriteString(fmt.Sprintf("ZSH_THEME=\"%s\"\n", sc.OhMyZshTheme))
+		if c.OhMyZshTheme != "" {
+			writer.WriteString(fmt.Sprintf("ZSH_THEME=\"%s\"\n", c.OhMyZshTheme))
 		}
-		if len(sc.OhMyZshPlugins) > 0 {
-			writer.WriteString(fmt.Sprintf("plugins=(%s)\n", strings.Join(sc.OhMyZshPlugins, " ")))
+		if len(c.OhMyZshPlugins) > 0 {
+			writer.WriteString(fmt.Sprintf("plugins=(%s)\n", strings.Join(c.OhMyZshPlugins, " ")))
 		}
 		writer.WriteString("\n")
 	}
 
-	if len(sc.Exports) > 0 {
+	if len(c.Exports) > 0 {
 		writer.WriteString("# Environment Variables\n")
-		for key, value := range sc.Exports {
-			if strings.Contains(value, " ") || strings.Contains(value, "$") {
-				writer.WriteString(fmt.Sprintf("export %s=\"%s\"\n", key, value))
-			} else {
-				writer.WriteString(fmt.Sprintf("export %s=%s\n", key, value))
-			}
+		for key, value := range c.Exports {
+			// Always quote values for consistency and safety
+			writer.WriteString(fmt.Sprintf("export %s=\"%s\"\n", key, value))
 		}
 		writer.WriteString("\n")
 	}
 
-	if len(sc.Aliases) > 0 {
+	if len(c.Aliases) > 0 {
 		writer.WriteString("# Aliases\n")
-		for name, command := range sc.Aliases {
+		for name, command := range c.Aliases {
 			writer.WriteString(fmt.Sprintf("alias %s='%s'\n", name, command))
 		}
 		writer.WriteString("\n")
 	}
 
-	if len(sc.CustomFunctions) > 0 {
+	if len(c.CustomFunctions) > 0 {
 		writer.WriteString("# Custom Functions\n")
-		for _, function := range sc.CustomFunctions {
+		for _, function := range c.CustomFunctions {
 			writer.WriteString(function)
 			writer.WriteString("\n\n")
 		}
 	}
 
-	for section, lines := range sc.RawSections {
+	for section, lines := range c.RawSections {
 		if section != "other" && len(lines) > 0 {
 			writer.WriteString(fmt.Sprintf("# %s\n", section))
 		}
@@ -171,19 +188,41 @@ func (sc *ShellConfig) Save() error {
 		}
 	}
 
-	writer.Flush()
-	file.Close()
+	if err := writer.Flush(); err != nil {
+		logger.Error("Failed to flush writer: %v", err)
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	
 
-	return os.Rename(sc.FilePath+".tmp", sc.FilePath)
+	// Create backup of original file
+	backupPath := c.FilePath + ".bak"
+	if _, err := os.Stat(c.FilePath); err == nil {
+		if err := os.Rename(c.FilePath, backupPath); err != nil {
+			logger.Warn("Failed to create backup: %v", err)
+		}
+	}
+
+	if err := os.Rename(tempFile, c.FilePath); err != nil {
+		logger.Error("Failed to rename temp file: %v", err)
+		// Try to restore backup
+		if _, err := os.Stat(backupPath); err == nil {
+			os.Rename(backupPath, c.FilePath)
+		}
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+	
+	logger.Info("Successfully saved config to %s", c.FilePath)
+	return nil
 }
 
-func (sc *ShellConfig) GetAvailableThemes() ([]string, error) {
+func (c *Config) GetAvailableThemes() ([]string, error) {
 	homeDir, _ := os.UserHomeDir()
 	themesDir := filepath.Join(homeDir, ".oh-my-zsh", "themes")
 
 	entries, err := os.ReadDir(themesDir)
 	if err != nil {
-		return []string{}, err
+		logger.Warn("Failed to read themes directory: %v", err)
+		return []string{}, nil
 	}
 
 	themes := []string{}
@@ -196,13 +235,14 @@ func (sc *ShellConfig) GetAvailableThemes() ([]string, error) {
 	return themes, nil
 }
 
-func (sc *ShellConfig) GetAvailablePlugins() ([]string, error) {
+func (c *Config) GetAvailablePlugins() ([]string, error) {
 	homeDir, _ := os.UserHomeDir()
 	pluginsDir := filepath.Join(homeDir, ".oh-my-zsh", "plugins")
 
 	entries, err := os.ReadDir(pluginsDir)
 	if err != nil {
-		return []string{}, err
+		logger.Warn("Failed to read plugins directory: %v", err)
+		return []string{}, nil
 	}
 
 	plugins := []string{}
