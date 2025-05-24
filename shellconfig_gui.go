@@ -143,17 +143,24 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 	pathTable = widget.NewTable(
 		func() (int, int) { return len(pathData), 1 },
 		func() fyne.CanvasObject {
+			orderLabel := widget.NewLabel("1.")
+			orderLabel.TextStyle = fyne.TextStyle{Bold: true}
 			entry := widget.NewEntry()
 			btn := widget.NewButton("X", func() {})
 			btn.Resize(fyne.NewSize(40, 30))
-			return container.NewBorder(nil, nil, nil, btn, entry)
+			return container.NewBorder(nil, nil, orderLabel, btn, entry)
 		},
 		func(id widget.TableCellID, cell fyne.CanvasObject) {
 			box := cell.(*fyne.Container)
+			// In BorderContainer: Objects[0] is center (entry), Objects[1] is left (orderLabel), Objects[2] is right (btn)
 			entry := box.Objects[0].(*widget.Entry)
-			btn := box.Objects[1].(*widget.Button)
+			orderLabel := box.Objects[1].(*widget.Label)
+			btn := box.Objects[2].(*widget.Button)
 			
 			if id.Row < len(pathData) {
+				// Set order number
+				orderLabel.SetText(fmt.Sprintf("%d.", id.Row+1))
+				
 				entry.SetText(pathData[id.Row][0])
 				entry.OnChanged = func(text string) {
 					if id.Row < len(pathData) {
@@ -242,15 +249,33 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 	quickAddSelect.Options = options
 	quickAddSelect.PlaceHolder = "Quick add common paths..."
 
+	// Track selected row
+	var selectedRow int = -1
+	
+	// Add selection handling to the table
+	pathTable.OnSelected = func(id widget.TableCellID) {
+		selectedRow = id.Row
+	}
+	
 	// Move up/down buttons
 	moveUpBtn := widget.NewButton("Move Up", func() {
-		// TODO: Implement when row is selected
-		dialog.ShowInformation("Info", "Select a path to move", gui.window)
+		if selectedRow > 0 && selectedRow < len(pathData) {
+			// Swap with previous item
+			pathData[selectedRow-1], pathData[selectedRow] = pathData[selectedRow], pathData[selectedRow-1]
+			selectedRow--
+			pathTable.Refresh()
+			pathTable.Select(widget.TableCellID{Row: selectedRow, Col: 0})
+		}
 	})
 	
 	moveDownBtn := widget.NewButton("Move Down", func() {
-		// TODO: Implement when row is selected
-		dialog.ShowInformation("Info", "Select a path to move", gui.window)
+		if selectedRow >= 0 && selectedRow < len(pathData)-1 {
+			// Swap with next item
+			pathData[selectedRow], pathData[selectedRow+1] = pathData[selectedRow+1], pathData[selectedRow]
+			selectedRow++
+			pathTable.Refresh()
+			pathTable.Select(widget.TableCellID{Row: selectedRow, Col: 0})
+		}
 	})
 
 	// Save the PATH

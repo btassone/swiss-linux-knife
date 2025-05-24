@@ -29,7 +29,7 @@ func main() {
 	myApp.Settings().SetTheme(theme.DefaultTheme())
 
 	myWindow := myApp.NewWindow("Swiss Linux Knife")
-	myWindow.Resize(fyne.NewSize(800, 600))
+	myWindow.Resize(fyne.NewSize(1200, 700))
 
 	content := container.NewStack()
 
@@ -70,7 +70,7 @@ func main() {
 			container.NewPadded(content),
 		),
 	)
-	split.SetOffset(0.3)
+	split.SetOffset(0.22)
 
 	myWindow.SetContent(split)
 
