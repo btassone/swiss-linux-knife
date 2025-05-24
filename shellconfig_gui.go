@@ -176,12 +176,29 @@ func (gui *ShellConfigGUI) createPathTab() fyne.CanvasObject {
 
 	// Add path with file browser
 	addWithBrowserBtn := widget.NewButton("Add Directory...", func() {
-		dialog.ShowFolderOpen(func(dir fyne.ListableURI, err error) {
+		// Create a custom folder dialog with larger size
+		folderDialog := dialog.NewFolderOpen(func(dir fyne.ListableURI, err error) {
 			if err == nil && dir != nil {
 				pathData = append(pathData, []string{dir.Path()})
 				pathTable.Refresh()
 			}
 		}, gui.window)
+		
+		// Get the current window size and set dialog to be larger
+		windowSize := gui.window.Canvas().Size()
+		dialogWidth := windowSize.Width * 0.8  // 80% of window width
+		dialogHeight := windowSize.Height * 0.8 // 80% of window height
+		
+		// Ensure minimum size
+		if dialogWidth < 800 {
+			dialogWidth = 800
+		}
+		if dialogHeight < 600 {
+			dialogHeight = 600
+		}
+		
+		folderDialog.Resize(fyne.NewSize(dialogWidth, dialogHeight))
+		folderDialog.Show()
 	})
 
 	// Add custom path
