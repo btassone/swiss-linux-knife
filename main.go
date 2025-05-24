@@ -70,7 +70,7 @@ func main() {
 			container.NewPadded(content),
 		),
 	)
-	split.SetOffset(0.35)
+	split.SetOffset(0.22)
 
 	myWindow.SetContent(split)
 
